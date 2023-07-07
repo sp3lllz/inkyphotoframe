@@ -26,3 +26,6 @@ I have also written a script to pick a random number and use that to determine w
 10. You'll also want to use your cli text edtior of choice to change the range of the random number generator to the number of photos you have in the images folder. And thats it for the setup now on your schedule the screen should up date.
 
 ### The Frame
+
+For the frame I wanted it to look inconspicous if placed next to a real photo frame. but i also wanted to hide the edges of the inky display so that only the the image was showing as if it was a photo print. Note the following mesurements only apply for the 5.7" version of the screen. 
+To do this I decided to make a frame from scratch, I made my frame out of oak but no reason you cant make it out of any other kind of wood. I measured that the visable area of the screen is 115mm x 85mm so i made the inside apature of my frame to this dimention. 
