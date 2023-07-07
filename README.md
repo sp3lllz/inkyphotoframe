@@ -25,4 +25,4 @@ I have also written a script to pick a random number and use that to determine w
 9. Using `crontab -e` add the following cron job `*/30 * * * * python3 /home/pi/ranphoto.py` you can edit this to suit how oftern you want the photo to refresh. note that this is based on the time not the number of minutes so setting it to every 30 minutes will make it refresh on the top of the hour and at half past the hour. 
 10. You'll also want to use your cli text edtior of choice to change the range of the random number generator to the number of photos you have in the images folder. And thats it for the setup now on your schedule the screen should up date.
 
-## The Frame
+### The Frame
