@@ -1,6 +1,6 @@
 # inkyphotoframe
 
-This is my latest project to make a digitsal photo frame that is virtually indistinguishable from a real photo frame.
+This is my latest project to make a digital photo frame that is virtually indistinguishable from a real photo frame.
 I have also written a script to pick a random number and use that to determine which photo to display you can have this refresh are whatever interval youd like with chrontab which I will detail how to do in the set up instructions.
 
 ## How to
