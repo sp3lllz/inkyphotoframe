@@ -7,7 +7,7 @@ I have also written a script to pick a random number and use that to determine w
 
 ### Heres what you will need for this project.
 
-1. Any rasberry pi from pi 2b or newer including the pi zero or zero 2 will work but I recommend the pi 3b or zero as a minimum for the built in wifi.
+1. Any rasberry pi from pi 2b or newer including the pi zero or zero 2 will work but I recommend the pi 3b or zero W as a minimum for the built in wifi.
 2. A MicroSD card the bigger the SD card the more photos you can have in your random pool.
 3. The [Pimoroni 5.7" 7 color e-ink display.](https://shop.pimoroni.com/products/inky-impression-5-7) This should work with the [4"](https://shop.pimoroni.com/products/inky-impression-4) or [7.3"](https://shop.pimoroni.com/products/inky-impression-7-3) version as well but you would need to format your photos and make your frame to different dimentions from the later steps of this tutoral.
 4. A frame to put the assembly in once you're finished, I'll get into the details on this later
