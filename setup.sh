@@ -31,9 +31,9 @@ fi
 echo "Installation completed"
 echo "We will now display a test image to test everything is working."
 #download test image
-curl -o /home/$USER/inkyframe/testimage.jpg https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/ebaf87d4ec4db4c45492eafdbb4082691fef1315/inkytest.jpg
+sudo curl -o /home/$USER/inkyframe/testimage.jpg https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/ebaf87d4ec4db4c45492eafdbb4082691fef1315/inkytest.jpg
 source ~/.virtualenvs/pimoroni/bin/activate
-python3 /home/$USER/inkyframe/image.py /home/$USER/inkyframe/testimage.jpg
+python3 /home/$USER/inkyframe/image.py --file /home/$USER/inkyframe/testimage.jpg
 echo "image called to screen please give it a few seconds to display"
 echo "please place images in the /home/$USER/inkyframe/images/main folder formatted as per the Readme on https://github.com/sp3lllz/inkyphotoframe/blob/main/README.md"
 echo "after images have been placed as per the readme please update the maximum number for the random number generator using ranupdate.sh please see the readme for more details"
