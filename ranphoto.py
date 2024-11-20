@@ -16,4 +16,4 @@ print("The Number is: {}".format(randnum))
 # set the variable for the photo path
 image_file = "images/main/{}.jpg".format(randnum)
 # run the image.py script to display the chosen image on the screen
-os.system("python image.py " + image_file)
+os.system("python image.py --file " + image_file)
