@@ -10,9 +10,9 @@ sudo mkdir /home/$USER/inkyframe
 sudo mkdir /home/$USER/inkyframe/images
 sudo mkdir /home/$USER/inkyframe/images/main
 #download scipts from github
-curl -o /home/$USER/inkyframe/ranphoto.py https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/ranphoto.py
-curl -o /home/$USER/inkyframe/ranphoto.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/randphoto.sh
-curl -o /home/$USER/inkyframe/ranupdate.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/ranupdate.sh
+sudo curl -o /home/$USER/inkyframe/ranphoto.py https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/ranphoto.py
+sudo curl -o /home/$USER/inkyframe/ranphoto.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/randphoto.sh
+sudo curl -o /home/$USER/inkyframe/ranupdate.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/ranupdate.sh
 #copy image.py script from the pimironi folder to the inkyframe folder
 sudo cp /home/$USER/Pimoroni/inky/examples/7color/image.py /home/$USER/inkyframe/image.py
 #make scripts executable
