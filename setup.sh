@@ -9,7 +9,8 @@ curl https://get.pimoroni.com/inky | bash
 sudo mkdir /home/$USER/inkyframe
 sudo mkdir /home/$USER/inkyframe/images
 sudo mkdir /home/$USER/inkyframe/images/main
-sudo chown $USER:$USER /home/$USER/inkyframe
+sudo chown -R $USER:$USER /home/$USER/inkyframe
+sudo chmod -R u+rwx /home/$USER/inkyframe
 #download scipts from github
 sudo curl -o /home/$USER/inkyframe/ranphoto.py https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/ranphoto.py
 sudo curl -o /home/$USER/inkyframe/ranphoto.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/randphoto.sh
