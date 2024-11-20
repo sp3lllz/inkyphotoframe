@@ -12,11 +12,11 @@ sudo mkdir /home/$USER/inkyframe/images/main
 sudo chown -R $USER:$USER /home/$USER/inkyframe
 sudo chmod -R u+rwx /home/$USER/inkyframe
 #download scipts from github
-sudo curl -o /home/$USER/inkyframe/ranphoto.py https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/ranphoto.py
-sudo curl -o /home/$USER/inkyframe/ranphoto.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/randphoto.sh
-sudo curl -o /home/$USER/inkyframe/ranupdate.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/ranupdate.sh
+curl -o /home/$USER/inkyframe/ranphoto.py https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/ranphoto.py
+curl -o /home/$USER/inkyframe/ranphoto.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/randphoto.sh
+curl -o /home/$USER/inkyframe/ranupdate.sh https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/ranupdate.sh
 #copy image.py script from the pimironi folder to the inkyframe folder
-sudo cp /home/$USER/Pimoroni/inky/examples/7color/image.py /home/$USER/inkyframe/image.py
+cp /home/$USER/Pimoroni/inky/examples/7color/image.py /home/$USER/inkyframe/image.py
 #make scripts executable
 sudo chmod +x /home/$USER/inkyframe/ranphoto.py
 sudo chmod +x /home/$USER/inkyframe/ranphoto.sh
@@ -33,7 +33,7 @@ fi
 echo "Installation completed"
 echo "We will now display a test image to test everything is working."
 #download test image
-sudo curl -o /home/$USER/inkyframe/testimage.jpg https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/ebaf87d4ec4db4c45492eafdbb4082691fef1315/inkytest.jpg
+curl -o /home/$USER/inkyframe/testimage.jpg https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/ebaf87d4ec4db4c45492eafdbb4082691fef1315/inkytest.jpg
 source ~/.virtualenvs/pimoroni/bin/activate
 python3 /home/$USER/inkyframe/image.py --file /home/$USER/inkyframe/testimage.jpg
 echo "please place images in the /home/$USER/inkyframe/images/main folder formatted as per the Readme on https://github.com/sp3lllz/inkyphotoframe/blob/main/README.md"
