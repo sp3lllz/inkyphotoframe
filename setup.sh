@@ -4,7 +4,7 @@ echo "This script is descigned for use with Rasberry Pi devices using the Pimrio
 echo "No guarantee or warranty is provided with this software please use at your own risk."
 echo "This script will make changes to your device including installing software and scripts"
 #install pimoroni software
-curl https://get.pimoroni.com/inky | bash
+#curl https://get.pimoroni.com/inky | bash
 #create nessisary folders
 sudo mkdir /home/$USER/inkyframe
 sudo mkdir /home/$USER/inkyframe/images
