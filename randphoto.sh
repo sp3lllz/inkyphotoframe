@@ -1,2 +1,2 @@
 source ~/.virtualenvs/pimoroni/bin/activate
-python3 /home/$USER/inkyframe/ranphoto.py
+python3 /var/inkyframe/ranphoto.py
