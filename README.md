@@ -26,7 +26,4 @@ First this will runn Pimirionis setup if you have already run that you can skip 
 
 ### The Frame
 
-For the frame I wanted it to look inconspicous if placed next to a real photo frame, but i also wanted to hide the edges of the inky display so that only the the image was showing as if it was a photo print. Note the following mesurements only apply for the 5.7" version of the screen. 
-To do this I decided to make a frame from scratch, I made my frame out of oak but no reason you cant make it out of any other kind of wood or even somthing else. I measured that the visable area of the screen is 115mm x 85mm so i made the inside apature of my frame to this dimention. I then cut a thin sheet of balsa wood to act as a mount/backplate at the apature of the mounting frame if you then line up the stand off locations from the inky frame to the backplate and drill some very small holes for the screws to go through. this will then keep the frame suspended in the display in the correct place.
-
-If you're not into wood working I also created a 3D model of the frame and a backplate for holding the inky frame into the correct position. Please note though that I have not printed this to validate its fitment so some tweaking may be necessary. 
+There is a few different options for the frame, you can make something from scratch or you can even use something like [this](https://makerworld.com/en/models/1221196-ikea-rodlam-inky-impression-7-mount#profileId-1238116) to mount it in an off the shelf frame to make it even more inconspicuous! 
