@@ -40,6 +40,20 @@ Or use any SFTP app (Cyberduck, WinSCP, FileZilla) to connect to `inkyframe.loca
 - There's no need to resize or rotate anything. Photos are scaled and cropped to fit the screen, and phone photos are turned the right way up automatically.
 - Photos are shown in random order, and every photo is shown once before any of them repeat.
 
+## Buttons
+
+The four buttons on the side of the display work without needing to SSH in:
+
+| Button | What it does |
+| --- | --- |
+| **A** | Next photo |
+| **B** | Previous photo. Press it again to keep going back |
+| **C** | Pause or resume the automatic changes. A pause symbol shows in the corner while it's paused |
+| **D** | Info screen: the frame's address and username for adding photos, and what each button does |
+| **Hold D** for 3 seconds | Shut down safely. The screen tells you when it's safe to unplug |
+
+The screen takes about 30 seconds to redraw, and presses during a redraw are ignored. You can change what A to D do in the settings below.
+
 ## Settings
 
 Edit the settings with `sudo nano /etc/inkyframe.conf`. Changes apply from the next photo change, or straight away if you run `inkyframe`.
@@ -51,6 +65,7 @@ Edit the settings with `sudo nano /etc/inkyframe.conf`. Changes apply from the n
 | `BACKGROUND` | `white` | Border colour for `FIT=pad` (a name like `black`, or `#rrggbb`) |
 | `ROTATE` | `0` | Turns photos clockwise by `90`, `180` or `270` degrees, for a frame hung in portrait or upside down |
 | `SATURATION` | `0.5` | Colour intensity, from `0.0` (muted) to `1.0` (vivid) |
+| `BUTTON_A` to `BUTTON_D` | `next`, `previous`, `pause`, `info` | What each button does: `next`, `previous`, `pause`, `info`, `shutdown` or `none` |
 
 To change **how often the photo changes**, run the install command again with `INTERVAL` set in minutes:
 
@@ -65,8 +80,9 @@ Changes happen on the clock, so the interval has to fit evenly into an hour or a
 | Command | What it does |
 | --- | --- |
 | `inkyframe` | Show the next photo now |
+| `inkyframe previous` / `pause` / `info` / `shutdown` | The same as the buttons |
 | `inkyframe path/to/photo.jpg` | Show a specific photo |
-| `journalctl -u inkyframe` | See which photos were shown, and any errors |
+| `journalctl -u 'inkyframe*'` | See which photos were shown, button presses, and any errors |
 | `systemctl list-timers inkyframe.timer` | See when the next change is due |
 
 ## Updating
@@ -77,13 +93,14 @@ Run the install command again. Your photos and settings are kept.
 
 - **`No EEPROM detected`**: check the display is pushed firmly onto the GPIO header, and that you've rebooted since installing.
 - **`Woah there, some pins we need are in use!`**: reboot. The installer changes a boot setting (`dtoverlay=spi0-0cs`) that only takes effect after a restart.
-- **Anything else**: run `journalctl -u inkyframe -n 50` and look at the last few lines.
+- **Buttons do nothing**: run `journalctl -u inkyframe-buttons -n 20` to see whether presses are being picked up.
+- **Anything else**: run `journalctl -u 'inkyframe*' -n 50` and look at the last few lines.
 
 ## Uninstalling
 
 ```bash
-sudo systemctl disable --now inkyframe.timer
-sudo rm -rf /opt/inkyframe /etc/inkyframe.conf /etc/systemd/system/inkyframe.* /usr/local/bin/inkyframe
+sudo systemctl disable --now inkyframe.timer inkyframe-buttons.service
+sudo rm -rf /opt/inkyframe /etc/inkyframe.conf /etc/systemd/system/inkyframe* /usr/local/bin/inkyframe /etc/sudoers.d/inkyframe
 sudo systemctl daemon-reload
 ```
 
@@ -92,7 +109,8 @@ Your `photos` folder is left alone.
 ## How it works
 
 - `setup.sh` installs the Python libraries (prebuilt from apt where possible, so nothing is compiled on the Pi), turns on SPI and I2C, installs Pimoroni's [inky](https://github.com/pimoroni/inky) library into a virtual environment in `/opt/inkyframe`, and sets up a systemd timer that runs the frame 30 seconds after boot and then on the clock every `INTERVAL` minutes. It's safe to run as many times as you like.
-- `inkyframe.py` picks a photo, fits it to the display and shows it. It runs once each time the timer fires and then exits, so nothing sits in memory between changes.
+- `inkyframe.py` picks a photo, fits it to the display and shows it. It runs once each time the timer fires or a button is pressed, then exits.
+- `buttons.py` is the only thing that keeps running. It's a small service that sleeps until a button is pressed and then runs `inkyframe.py`. It also lets the buttons shut the Pi down, via a sudoers rule that allows only `systemctl poweroff`.
 
 ## The frame
 

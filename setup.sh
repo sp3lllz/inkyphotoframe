@@ -52,8 +52,9 @@ main() {
 
     say "Installing system packages (this can take a few minutes on a Pi Zero)"
     # numpy, Pillow and spidev come from apt as prebuilt packages, so nothing has to be compiled.
+    # The font is for the info screen.
     local pkg missing=()
-    for pkg in python3-venv python3-pil python3-numpy python3-spidev; do
+    for pkg in python3-venv python3-pil python3-numpy python3-spidev fonts-dejavu-core; do
         dpkg -s "$pkg" &>/dev/null || missing+=("$pkg")
     done
     if ((${#missing[@]})); then
@@ -83,6 +84,7 @@ main() {
     say "Installing the photo frame software to $APP_DIR"
     sudo mkdir -p "$APP_DIR"
     fetch inkyframe.py "$APP_DIR/inkyframe.py"
+    fetch buttons.py "$APP_DIR/buttons.py"
     fetch welcome.jpg "$APP_DIR/welcome.jpg"
     # --system-site-packages lets pip reuse the apt packages above; --clear rebuilds a venv broken by an OS upgrade.
     "$APP_DIR/venv/bin/python" -c '' 2>/dev/null || sudo python3 -m venv --clear --system-site-packages "$APP_DIR/venv"
@@ -95,6 +97,7 @@ main() {
 
     if [[ -f $CONFIG ]]; then
         photos=$(sed -n 's/^PHOTO_DIR=//p' "$CONFIG")
+        grep -q '^BUTTON_A=' "$CONFIG" || button_settings | sudo tee -a "$CONFIG" >/dev/null
     else
         photos=$home/photos
         say "Creating your photo folder: $photos"
@@ -118,6 +121,7 @@ ROTATE=0
 
 # Colour saturation, from 0.0 (muted) to 1.0 (vivid)
 SATURATION=0.5
+$(button_settings)
 EOF
         migrate_v1 "$user" "$photos"
     fi
@@ -130,7 +134,7 @@ Description=Inky photo frame: show the next photo
 [Service]
 Type=oneshot
 User=$user
-ExecStart=$APP_DIR/venv/bin/python $APP_DIR/inkyframe.py
+ExecStart=$APP_DIR/venv/bin/python $APP_DIR/inkyframe.py auto
 Nice=10
 NoNewPrivileges=yes
 ProtectSystem=full
@@ -148,10 +152,37 @@ AccuracySec=1s
 [Install]
 WantedBy=timers.target
 EOF
+
+    say "Setting up the buttons"
+    sudo tee "$UNIT_DIR/inkyframe-buttons.service" >/dev/null <<EOF
+[Unit]
+Description=Inky photo frame: buttons
+
+[Service]
+User=$user
+ExecStart=$APP_DIR/venv/bin/python $APP_DIR/buttons.py
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    # Holding D shuts the Pi down, so allow exactly that command without a password.
+    printf '%s ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff\n' "$user" | sudo tee /etc/sudoers.d/inkyframe.new >/dev/null
+    sudo chmod 440 /etc/sudoers.d/inkyframe.new
+    if sudo visudo -cqf /etc/sudoers.d/inkyframe.new; then
+        sudo mv /etc/sudoers.d/inkyframe.new /etc/sudoers.d/inkyframe
+    else
+        sudo rm -f /etc/sudoers.d/inkyframe.new
+        warn "Couldn't allow the buttons to shut the Pi down; everything else will still work."
+    fi
+
     sudo systemctl daemon-reload
-    sudo systemctl enable --quiet inkyframe.timer
+    sudo systemctl enable --quiet inkyframe.timer inkyframe-buttons.service
 
     if [[ ! -f $REBOOT_FLAG ]]; then
+        sudo systemctl restart inkyframe-buttons.service
         say "Showing a picture to test the display (the screen takes about 30 seconds to refresh)"
         # (Re)starting the timer triggers a run straight away; starting the service joins that run and waits for it.
         sudo systemctl restart inkyframe.timer
@@ -166,8 +197,9 @@ EOF
   Add photos to:        $photos   (subfolders are fine)
     from your computer: scp *.jpg $user@$(hostname).local:${photos#"$home"/}/
   Change settings:      sudo nano $CONFIG
-  Show the next photo:  inkyframe
-  See the log:          journalctl -u inkyframe
+  Buttons:              A next, B previous, C pause, D info (hold D to shut down)
+  Show the next photo:  inkyframe   (or: inkyframe previous / pause / info)
+  See the log:          journalctl -u 'inkyframe*'
 EOF
 
     if [[ -f $REBOOT_FLAG ]]; then
@@ -179,6 +211,20 @@ EOF
         fi
         echo "Reboot when you're ready with: sudo reboot"
     fi
+}
+
+# Button settings for the config file; also appended to configs from before the buttons existed.
+button_settings() {
+    cat <<'EOF'
+
+# What the buttons on the side of the display do, A to D.
+# Choose from: next, previous, pause, info, shutdown, none
+# (Holding D for 3 seconds always shuts the Pi down safely.)
+BUTTON_A=next
+BUTTON_B=previous
+BUTTON_C=pause
+BUTTON_D=info
+EOF
 }
 
 # Tidy up after the original cron-based version, which lived in /var/inkyframe.
