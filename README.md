@@ -1,29 +1,97 @@
 # inkyphotoframe
 
-This is my latest project to make a digital photo frame that is virtually indistinguishable from a real photo frame.
-I have also written a script to pick a random number and use that to determine which photo to display you can have this refresh are whatever interval youd like with chrontab which I will detail how to do in the set up instructions.
+A digital photo frame that's virtually indistinguishable from a real one. A Raspberry Pi shows your photos on a Pimoroni colour e-ink display and changes to a new random one every 30 minutes (or whatever interval you like). E-ink holds its picture with the power off, so it looks like a print, not a screen.
 
-## How to
+![Inky Photo Frame welcome image](welcome.jpg)
 
-### Heres what you will need for this project.
+## What you need
 
-1. Any rasberry pi from pi 2b or newer including the pi zero or zero 2 will work but I recommend the pi 3b or zero W as a minimum for the built in wifi.
-2. A MicroSD card the bigger the SD card the more photos you can have in your random pool.
-3. The [Pimoroni 5.7" 7 color e-ink display.](https://shop.pimoroni.com/products/inky-impression-5-7) This should work with the [4"](https://shop.pimoroni.com/products/inky-impression-4) or [7.3"](https://shop.pimoroni.com/products/inky-impression-7-3) version as well but you would need to format your photos and make your frame to different dimentions from the later steps of this tutoral.
-4. A frame to put the assembly in once you're finished, I'll get into the details on this later
+1. **A Raspberry Pi** with a 40-pin header. A Pi Zero 2 W or Pi 3 or newer is best because it has Wi-Fi built in. A Pi Zero W works too, just more slowly.
+2. **A microSD card.** The bigger the card, the more photos it can hold.
+3. **A Pimoroni Inky Impression display**: the [5.7"](https://shop.pimoroni.com/products/inky-impression-5-7), [4"](https://shop.pimoroni.com/products/inky-impression-4) or [7.3"](https://shop.pimoroni.com/products/inky-impression-7-3), or the newer Spectra 6 versions. Photos are resized to fit whichever one you have.
+4. **A frame** to put it all in (see [The frame](#the-frame) below).
 
-### Setup of the electronics and code. 
+## Setup
 
-1. Use the [rasberry pi imaging tool](https://www.raspberrypi.com/software/) to image your MicroSD card with Rasberry PiOS Lite and use the advanced options to enable SSH and add your wifi SSID
-2. put the MicroSD card into the Pi and then attach it to the inky dispaly using the GPIO headers. If you have a Pi Zero W or Pi Zero W 2 you can attach the Pi directly to the board if youre using a B sized Pi use the standoffs and GPIO extention headers included with the display.
-3. Boot the Pi up and connect using your SSH client of choice
-4. Now its time to install the inkyphotoframe software, this can be done with a simple one line command
-`curl https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/refs/heads/main/setup.sh | bash`
-First this will runn Pimirionis setup if you have already run that you can skip this by chosing no at the yes no prompt. After that it will create the nessisary folder structure and download the scripts to the pi and finally create a timed crontab job to rotate the image every 30 minutes at the top of the hour and at half past the hour. At the end of the script it should update the photo frame with the following image ![inkytest.jpg](https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/ebaf87d4ec4db4c45492eafdbb4082691fef1315/inkytest.jpg)
-5. Now navigate to the following folder `/var/inkyframe/images/main` this is where you should place your images. For the best results images should be resize to 800*480 resolution but cropping to the same aspect ratio will usually serfice. Images should be renamed to be in the following format, `1.jpg` `2.jpg` `3.jpg` ect. all images should be in `.jpg` format.
-6. Once you have renamed all your images to this format ensuring there are no gaps in the numbering run the ranupdate.sh script like so `bash /var/inkyframe/ranupdate.sh` and enter the highest number of the photo names. This will set the random number picker to only pick between 1 and the maximum number photo so that it can never select a photo that doesnt exist.
-7. Setup is now complete! The photo should uptatically update as per the schedule. 
+1. Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to flash **Raspberry Pi OS Lite** (Bookworm or newer) onto the microSD card. In the customisation settings, set a hostname (e.g. `inkyframe`), a username and password, and your Wi-Fi, and turn on SSH.
+2. Plug the display onto the Pi's GPIO header. A Pi Zero fits straight onto the back of the board. For a full-size Pi, use the standoffs and the GPIO extension header that come with the display.
+3. Power up the Pi, connect over SSH (`ssh <username>@inkyframe.local`) and run:
 
-### The Frame
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/setup.sh | bash
+   ```
 
-There is a few different options for the frame, you can make something from scratch or you can even use something like [this](https://makerworld.com/en/models/1221196-ikea-rodlam-inky-impression-7-mount#profileId-1238116) to mount it in an off the shelf frame to make it even more inconspicuous! 
+4. At the end it asks to reboot, which it needs to do to switch on the display's SPI and I2C interfaces. About a minute after the Pi restarts, the frame shows the welcome image above.
+
+That's it. Now add some photos.
+
+## Adding photos
+
+Put your photos in the `photos` folder in your home directory on the Pi. From a Mac or Linux computer:
+
+```bash
+scp *.jpg <username>@inkyframe.local:photos/
+```
+
+Or use any SFTP app (Cyberduck, WinSCP, FileZilla) to connect to `inkyframe.local` with your Pi's username and password, then drag photos into `photos`.
+
+- Files can have any name, and subfolders are fine.
+- JPEG, PNG, WebP, GIF, BMP and TIFF all work. For iPhone HEIC photos, export them as JPEG first.
+- There's no need to resize or rotate anything. Photos are scaled and cropped to fit the screen, and phone photos are turned the right way up automatically.
+- Photos are shown in random order, and every photo is shown once before any of them repeat.
+
+## Settings
+
+Edit the settings with `sudo nano /etc/inkyframe.conf`. Changes apply from the next photo change, or straight away if you run `inkyframe`.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `PHOTO_DIR` | `~/photos` | Folder to show photos from |
+| `FIT` | `crop` | `crop` fills the screen and trims the edges. `pad` shows the whole photo and adds borders |
+| `BACKGROUND` | `white` | Border colour for `FIT=pad` (a name like `black`, or `#rrggbb`) |
+| `ROTATE` | `0` | Turns photos clockwise by `90`, `180` or `270` degrees, for a frame hung in portrait or upside down |
+| `SATURATION` | `0.5` | Colour intensity, from `0.0` (muted) to `1.0` (vivid) |
+
+To change **how often the photo changes**, run the install command again with `INTERVAL` set in minutes:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/setup.sh | INTERVAL=60 bash
+```
+
+## Handy commands
+
+| Command | What it does |
+| --- | --- |
+| `inkyframe` | Show the next photo now |
+| `inkyframe path/to/photo.jpg` | Show a specific photo |
+| `journalctl -u inkyframe` | See which photos were shown, and any errors |
+| `systemctl list-timers inkyframe.timer` | See when the next change is due |
+
+## Updating
+
+Run the install command again. Your photos and settings are kept.
+
+## Troubleshooting
+
+- **`No EEPROM detected`**: check the display is pushed firmly onto the GPIO header, and that you've rebooted since installing.
+- **`Woah there, some pins we need are in use!`**: reboot. The installer changes a boot setting (`dtoverlay=spi0-0cs`) that only takes effect after a restart.
+- **Anything else**: run `journalctl -u inkyframe -n 50` and look at the last few lines.
+
+## Uninstalling
+
+```bash
+sudo systemctl disable --now inkyframe.timer
+sudo rm -rf /opt/inkyframe /etc/inkyframe.conf /etc/systemd/system/inkyframe.* /usr/local/bin/inkyframe
+sudo systemctl daemon-reload
+```
+
+Your `photos` folder is left alone.
+
+## How it works
+
+- `setup.sh` installs the Python libraries (prebuilt from apt where possible, so nothing is compiled on the Pi), turns on SPI and I2C, installs Pimoroni's [inky](https://github.com/pimoroni/inky) library into a virtual environment in `/opt/inkyframe`, and sets up a systemd timer that runs the frame 30 seconds after boot and then every `INTERVAL` minutes. It's safe to run as many times as you like.
+- `inkyframe.py` picks a photo, fits it to the display and shows it. It runs once each time the timer fires and then exits, so nothing sits in memory between changes.
+
+## The frame
+
+There are a few options for the frame. You can make something from scratch, or use something like [this mount](https://makerworld.com/en/models/1221196-ikea-rodlam-inky-impression-7-mount#profileId-1238116) to fit it in an off-the-shelf IKEA frame and make it even more inconspicuous!
