@@ -5,7 +5,7 @@
 #
 # Re-run it at any time to update; your photos and settings are kept.
 # Photos change on the clock, every 30 minutes by default. To change that: ... | INTERVAL=60 bash
-# Battery mode for a PiSugar (switches the Pi off between photos): ... | BATTERY=yes bash
+# Battery mode for a PiSugar (switches the Pi off between photos, every 6 hours by default): ... | BATTERY=yes bash
 set -euo pipefail
 
 REPO=https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main
@@ -34,11 +34,19 @@ main() {
     command -v apt-get >/dev/null || die "This installer needs Raspberry Pi OS (Bookworm or newer)."
     grep -qs "Raspberry Pi" /proc/device-tree/model || warn "This doesn't look like a Raspberry Pi; carrying on anyway."
 
-    local user home interval calendar photos
+    local user home battery was_battery=no interval saved_interval='' default_interval=30 every calendar photos
     user=${SUDO_USER:-$(id -un)}
     home=$(getent passwd "$user" | cut -d: -f6)
-    interval=${INTERVAL:-$(sed -n 's/^# INTERVAL=\([0-9]*\).*/\1/p' "$UNIT_DIR/inkyframe.timer" 2>/dev/null || true)}
-    interval=${interval:-30}
+    # Battery mode: BATTERY=yes or no, otherwise keep whatever was set up last time.
+    if [[ -f $UNIT_DIR/inkyframe-battery.service ]]; then was_battery=yes; fi
+    battery=${BATTERY:-$was_battery}
+    [[ $battery == yes || $battery == no ]] || die "BATTERY must be yes or no."
+    # Each mode has its own default interval. The last one used is kept, unless battery mode was just switched.
+    if [[ $battery == yes ]]; then default_interval=360; fi
+    if [[ $battery == "$was_battery" ]]; then
+        saved_interval=$(sed -n 's/^# INTERVAL=\([0-9]*\).*/\1/p' "$UNIT_DIR/inkyframe.timer" 2>/dev/null || true)
+    fi
+    interval=${INTERVAL:-${saved_interval:-$default_interval}}
     # Photos change on the clock, so the interval has to divide evenly into an hour or a day.
     if [[ ! $interval =~ ^[1-9][0-9]*$ ]]; then
         calendar=
@@ -50,12 +58,8 @@ main() {
         calendar="00/$((interval / 60)):00" # e.g. 120: every other hour, on the hour
     fi
     [[ -n ${calendar:-} ]] || die "INTERVAL must fit evenly into the clock, e.g. 10, 15, 20, 30, 60, 120 or 1440 minutes."
-    # Battery mode: BATTERY=yes or no, otherwise keep whatever was set up last time.
-    local battery=${BATTERY:-}
-    if [[ -z $battery ]]; then
-        if [[ -f $UNIT_DIR/inkyframe-battery.service ]]; then battery=yes; else battery=no; fi
-    fi
-    [[ $battery == yes || $battery == no ]] || die "BATTERY must be yes or no."
+    every="every $interval minutes"
+    if ((interval == 60)); then every="every hour"; elif ((interval % 60 == 0)); then every="every $((interval / 60)) hours"; fi
 
     say "Installing system packages (this can take a few minutes on a Pi Zero)"
     # numpy, Pillow and spidev come from apt as prebuilt packages, so nothing has to be compiled.
@@ -135,7 +139,7 @@ EOF
         migrate_v1 "$user" "$photos"
     fi
 
-    say "Scheduling a new photo every $interval minutes, on the clock"
+    say "Scheduling a new photo $every, on the clock"
     sudo tee "$UNIT_DIR/inkyframe.service" >/dev/null <<EOF
 [Unit]
 Description=Inky photo frame: show the next photo
@@ -151,7 +155,7 @@ EOF
     sudo tee "$UNIT_DIR/inkyframe.timer" >/dev/null <<EOF
 # INTERVAL=$interval (written by setup.sh, which reads it back when re-run)
 [Unit]
-Description=Change the Inky photo frame picture every $interval minutes, on the clock
+Description=Change the Inky photo frame picture $every, on the clock
 
 [Timer]
 OnCalendar=$calendar

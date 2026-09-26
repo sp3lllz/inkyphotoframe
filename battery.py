@@ -20,7 +20,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-INTERVAL = timedelta(minutes=int(os.environ.get("INTERVAL", "30")))  # set by setup.sh
+INTERVAL = timedelta(minutes=int(os.environ.get("INTERVAL", "360")))  # set by setup.sh
 AWAKE_SECONDS = 5 * 60  # how long to stay on after a manual wake or a button press
 EMPTY = 10  # battery %: below this, show a "please charge" screen and stay off
 STATE_DIR = Path.home() / ".local/state/inkyframe"

@@ -77,9 +77,10 @@ Battery life depends mostly on how often the photo changes. These are very rough
 | Every 30 minutes | about 5 days | about 3 weeks |
 | Every hour | about 10 days | about 6 weeks |
 | Every 2 hours | about 2 weeks | about 2 months |
+| **Every 6 hours** (the battery mode default) | about 3 to 4 weeks | about 4 months |
 | Once a day | about a month | about 5 months |
 
-Set the interval with `INTERVAL` on the same install command, e.g. `BATTERY=yes INTERVAL=120 bash`. Turn battery mode off again with `BATTERY=no`.
+In battery mode the photo changes every 6 hours (at midnight, 6am, noon and 6pm) unless you choose a different `INTERVAL` on the same install command, e.g. `BATTERY=yes INTERVAL=120 bash`. Turn battery mode off again with `BATTERY=no`, which puts the interval back to the plugged-in default of 30 minutes unless you set one.
 
 The installer finds a PiSugar 3 automatically. For a PiSugar 2, name the model: `PISUGAR_MODEL="PiSugar 2 (4-LEDs)"`, `"PiSugar 2 (2-LEDs)"` or `"PiSugar 2 Pro"`. The PiSugar S has no clock, so it can't wake the Pi and won't work with battery mode.
 
@@ -102,7 +103,7 @@ To change **how often the photo changes**, run the install command again with `I
 curl -sSL https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/setup.sh | INTERVAL=60 bash
 ```
 
-Changes happen on the clock, so the interval has to fit evenly into an hour or a day: for example `15` (:00, :15, :30, :45), `30` (the default), `60` (on the hour), `120` (every other hour) or `1440` (midnight). A photo is also shown 30 seconds after the Pi starts.
+Changes happen on the clock, so the interval has to fit evenly into an hour or a day: for example `15` (:00, :15, :30, :45), `30` (the default), `60` (on the hour), `120` (every other hour), `360` (the default in [battery mode](#battery-mode-pisugar)) or `1440` (midnight). A photo is also shown 30 seconds after the Pi starts. Your interval is remembered when you re-run the installer, until you switch battery mode on or off.
 
 ## Handy commands
 
