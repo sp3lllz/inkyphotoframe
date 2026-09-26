@@ -54,6 +54,35 @@ The four buttons on the side of the display work without needing to SSH in:
 
 The screen takes about 30 seconds to redraw, and presses during a redraw are ignored. You can change what A to D do in the settings below.
 
+## Battery mode (PiSugar)
+
+The frame can run from a [PiSugar](https://github.com/PiSugar/PiSugar) battery: a PiSugar 3 for a Pi Zero, or a PiSugar 3 Plus for a Pi 3 or 4. An always-on Pi would flatten it in less than a day. Battery mode instead **switches the Pi off completely between photos**. E-ink keeps its picture with no power at all, and the PiSugar's clock wakes the Pi up for the next change. To turn it on, run the install command with `BATTERY=yes` (it's remembered from then on):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/setup.sh | BATTERY=yes bash
+```
+
+How it behaves on battery:
+
+- **Each photo change** takes about a minute: the Pi wakes, shows the next photo, sets the PiSugar to wake it for the change after, and switches off.
+- **To use the buttons or add photos**, wake it with the PiSugar's power button. It shows the next photo and stays on for 5 minutes after waking, or after the last button press. It never switches off while you're logged in over SSH.
+- **While charging**, it stays on and works just like the plugged-in version.
+- **When paused** (button C), it switches off and doesn't wake again until you press the PiSugar's power button.
+- **Below 20% battery**, a small battery symbol appears in the corner of each photo, and the info screen (button D) shows the level. Below 10%, the screen says "Battery empty" and the frame stays off until you charge it and press the PiSugar's power button.
+
+Battery life depends mostly on how often the photo changes. These are very rough estimates for a Pi Zero 2 W:
+
+| Photo changes | PiSugar 3 (1200 mAh) | PiSugar 3 Plus (5000 mAh) |
+| --- | --- | --- |
+| Every 30 minutes | about 5 days | about 3 weeks |
+| Every hour | about 10 days | about 6 weeks |
+| Every 2 hours | about 2 weeks | about 2 months |
+| Once a day | about a month | about 5 months |
+
+Set the interval with `INTERVAL` on the same install command, e.g. `BATTERY=yes INTERVAL=120 bash`. Turn battery mode off again with `BATTERY=no`.
+
+The installer finds a PiSugar 3 automatically. For a PiSugar 2, name the model: `PISUGAR_MODEL="PiSugar 2 (4-LEDs)"`, `"PiSugar 2 (2-LEDs)"` or `"PiSugar 2 Pro"`. The PiSugar S has no clock, so it can't wake the Pi and won't work with battery mode.
+
 ## Settings
 
 Edit the settings with `sudo nano /etc/inkyframe.conf`. Changes apply from the next photo change, or straight away if you run `inkyframe`.
@@ -82,7 +111,7 @@ Changes happen on the clock, so the interval has to fit evenly into an hour or a
 | `inkyframe` | Show the next photo now |
 | `inkyframe previous` / `pause` / `info` / `shutdown` | The same as the buttons |
 | `inkyframe path/to/photo.jpg` | Show a specific photo |
-| `journalctl -u 'inkyframe*'` | See which photos were shown, button presses, and any errors |
+| `journalctl -u 'inkyframe*'` | See which photos were shown, button presses, when it switched off on battery, and any errors |
 | `systemctl list-timers inkyframe.timer` | See when the next change is due |
 
 ## Updating
@@ -99,18 +128,19 @@ Run the install command again. Your photos and settings are kept.
 ## Uninstalling
 
 ```bash
-sudo systemctl disable --now inkyframe.timer inkyframe-buttons.service
+sudo systemctl disable --now inkyframe.timer inkyframe-buttons.service inkyframe-battery.service
 sudo rm -rf /opt/inkyframe /etc/inkyframe.conf /etc/systemd/system/inkyframe* /usr/local/bin/inkyframe /etc/sudoers.d/inkyframe
 sudo systemctl daemon-reload
 ```
 
-Your `photos` folder is left alone.
+Your `photos` folder is left alone. If you used battery mode, also run `sudo apt purge pisugar-server pisugar-poweroff` and `sudo systemctl enable --now apt-daily.timer apt-daily-upgrade.timer man-db.timer`.
 
 ## How it works
 
 - `setup.sh` installs the Python libraries (prebuilt from apt where possible, so nothing is compiled on the Pi), turns on SPI and I2C, installs Pimoroni's [inky](https://github.com/pimoroni/inky) library into a virtual environment in `/opt/inkyframe`, and sets up a systemd timer that runs the frame 30 seconds after boot and then on the clock every `INTERVAL` minutes. It's safe to run as many times as you like.
 - `inkyframe.py` picks a photo, fits it to the display and shows it. It runs once each time the timer fires or a button is pressed, then exits.
-- `buttons.py` is the only thing that keeps running. It's a small service that sleeps until a button is pressed and then runs `inkyframe.py`. It also lets the buttons shut the Pi down, via a sudoers rule that allows only `systemctl poweroff`.
+- `buttons.py` is a small service that keeps running while the Pi is on. It sleeps until a button is pressed and then runs `inkyframe.py`. It also lets the buttons shut the Pi down, via a sudoers rule that allows only `systemctl poweroff`.
+- `battery.py` runs only in battery mode. It talks to PiSugar's `pisugar-server` (installed from PiSugar's GitHub releases, and only reachable from the Pi itself) to read the battery, sync the clock and set the wake-up alarm, then powers off. `pisugar-poweroff` then cuts the battery output, so the switched-off Pi draws almost nothing. Battery mode also turns off the `apt-daily` and `man-db` timers, which would otherwise run on every wake-up.
 
 ## The frame
 

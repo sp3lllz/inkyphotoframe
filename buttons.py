@@ -18,6 +18,7 @@ from gpiod.line import Bias, Direction, Edge, Value
 from smbus2 import SMBus
 
 INKYFRAME = [sys.executable, str(Path(__file__).with_name("inkyframe.py"))]
+PRESSED = Path.home() / ".local/state/inkyframe/pressed"  # in battery mode, keeps the Pi on for a while
 HOLD_SECONDS = 3
 
 
@@ -49,6 +50,8 @@ def main():
     while True:
         for event in request.read_edge_events():
             line, label = event.line_offset, buttons[event.line_offset]
+            PRESSED.parent.mkdir(parents=True, exist_ok=True)
+            PRESSED.touch()
             # A tap or a hold? Wait for the button to come back up, for up to HOLD_SECONDS.
             give_up = time.monotonic() + HOLD_SECONDS
             while request.get_value(line) == Value.INACTIVE and time.monotonic() < give_up:

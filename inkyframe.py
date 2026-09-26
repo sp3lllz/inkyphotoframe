@@ -29,6 +29,8 @@ from pathlib import Path
 from inky.auto import auto
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+from battery import battery
+
 CONFIG_FILE = Path("/etc/inkyframe.conf")
 DEFAULTS = {
     "PHOTO_DIR": "~/photos",
@@ -49,6 +51,7 @@ COMMANDS = {  # command: how the info screen describes it
     "shutdown": "shut down",
     "none": "nothing",
 }
+INTERNAL = {"auto", "lowbattery"}  # sent by the timer and battery.py
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 WELCOME = Path(__file__).with_name("welcome.jpg")
 STATE_DIR = Path.home() / ".local/state/inkyframe"
@@ -143,6 +146,16 @@ def add_pause_badge(image):
         draw.rectangle((left, y - radius // 2, left + bar, y + radius // 2), fill="white")
 
 
+def add_low_battery_badge(image):
+    """A nearly empty battery in the bottom-left corner: time to charge."""
+    draw = ImageDraw.Draw(image)
+    unit = min(image.size) // 28
+    x, y = 2 * unit, image.height - 3 * unit
+    draw.rectangle((x, y, x + 4 * unit, y + 2 * unit), fill="white", outline="black", width=max(unit // 4, 1))
+    draw.rectangle((x + 4 * unit, y + unit // 2, x + 9 * unit // 2, y + 3 * unit // 2), fill="black")
+    draw.rectangle((x + unit // 2, y + unit // 2, x + 5 * unit // 4, y + 3 * unit // 2), fill="red")
+
+
 def font(size, bold=False):
     try:
         return ImageFont.truetype("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", size)
@@ -186,13 +199,18 @@ def local_ip():
 def info_lines(config, state, folder, count):
     with contextlib.suppress(ValueError):
         folder = folder.relative_to(Path.home())
+    status = [f"{count} photo{'' if count == 1 else 's'}"]
+    if power := battery():
+        status.append(f"battery {power[0]:.0f}%" + (" (charging)" if power[1] else ""))
+    if state["paused"]:
+        status.append("paused")
     buttons = [f"{b}   {COMMANDS.get(config[f'BUTTON_{b}'], config[f'BUTTON_{b}'])}" for b in "ABCD"]
     buttons[-1] += "   (hold: shut down)"
     return [
         "Add photos with an SFTP app:",
         f"server {socket.gethostname()}.local or {local_ip()}",
         f"user {getpass.getuser()}, folder {folder}",
-        f"{count} photo{'' if count == 1 else 's'}" + (", paused" if state["paused"] else ""),
+        ", ".join(status),
         "",
         *buttons,
     ]
@@ -233,6 +251,10 @@ def update(command, photo, config, state, rotate):
         lines = ["Wait 30 seconds, then it's safe to unplug.", "To start it again, unplug it and plug it back in."]
         image = text_screen(size, "Switched off", lines)
         state["showing"] = None
+    elif command == "lowbattery":
+        lines = ["Please charge the frame, then press", "the power button on the PiSugar."]
+        image = text_screen(size, "Battery empty", lines)
+        state["showing"] = None
     else:
         if command == "pause":
             state["paused"] = not state["paused"]
@@ -247,6 +269,8 @@ def update(command, photo, config, state, rotate):
         image = fit_photo(path, size, config)
         if state["paused"]:
             add_pause_badge(image)
+        if (power := battery()) and power[0] < 20 and not power[1]:
+            add_low_battery_badge(image)
 
     image = image.rotate(-rotate, expand=True)
     try:
@@ -266,7 +290,7 @@ def main():
     if command == "button":  # sent by buttons.py, e.g. "button A"
         command = config.get(f"BUTTON_{''.join(args)}", "none")
     photo = None
-    if command not in COMMANDS and command != "auto":  # "auto" is the timer's scheduled change
+    if command not in COMMANDS and command not in INTERNAL:
         photo = Path(command)
         if not photo.is_file():
             sys.exit(f"No such command or photo: {command}\n\n{__doc__.strip()}")
