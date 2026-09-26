@@ -4,7 +4,7 @@
 #   curl -sSL https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/setup.sh | bash
 #
 # Re-run it at any time to update; your photos and settings are kept.
-# To change how often the photo changes: ... | INTERVAL=60 bash   (minutes, default 30)
+# Photos change on the clock, every 30 minutes by default. To change that: ... | INTERVAL=60 bash
 set -euo pipefail
 
 REPO=https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main
@@ -33,12 +33,22 @@ main() {
     command -v apt-get >/dev/null || die "This installer needs Raspberry Pi OS (Bookworm or newer)."
     grep -qs "Raspberry Pi" /proc/device-tree/model || warn "This doesn't look like a Raspberry Pi; carrying on anyway."
 
-    local user home interval photos
+    local user home interval calendar photos
     user=${SUDO_USER:-$(id -un)}
     home=$(getent passwd "$user" | cut -d: -f6)
-    interval=${INTERVAL:-$(sed -n 's/^OnUnitActiveSec=\([0-9]*\)min$/\1/p' "$UNIT_DIR/inkyframe.timer" 2>/dev/null || true)}
+    interval=${INTERVAL:-$(sed -n 's/^# INTERVAL=\([0-9]*\).*/\1/p' "$UNIT_DIR/inkyframe.timer" 2>/dev/null || true)}
     interval=${interval:-30}
-    [[ $interval =~ ^[1-9][0-9]*$ ]] || die "INTERVAL must be a whole number of minutes."
+    # Photos change on the clock, so the interval has to divide evenly into an hour or a day.
+    if [[ ! $interval =~ ^[1-9][0-9]*$ ]]; then
+        calendar=
+    elif ((interval < 60 && 60 % interval == 0)); then
+        calendar="*:00/$interval" # e.g. 30: on the hour and at half past
+    elif ((interval == 1440)); then
+        calendar="00:00" # once a day at midnight
+    elif ((interval % 60 == 0 && 24 % (interval / 60) == 0)); then
+        calendar="00/$((interval / 60)):00" # e.g. 120: every other hour, on the hour
+    fi
+    [[ -n ${calendar:-} ]] || die "INTERVAL must fit evenly into the clock, e.g. 10, 15, 20, 30, 60, 120 or 1440 minutes."
 
     say "Installing system packages (this can take a few minutes on a Pi Zero)"
     # numpy, Pillow and spidev come from apt as prebuilt packages, so nothing has to be compiled.
@@ -112,7 +122,7 @@ EOF
         migrate_v1 "$user" "$photos"
     fi
 
-    say "Scheduling a new photo every $interval minutes"
+    say "Scheduling a new photo every $interval minutes, on the clock"
     sudo tee "$UNIT_DIR/inkyframe.service" >/dev/null <<EOF
 [Unit]
 Description=Inky photo frame: show the next photo
@@ -126,12 +136,14 @@ NoNewPrivileges=yes
 ProtectSystem=full
 EOF
     sudo tee "$UNIT_DIR/inkyframe.timer" >/dev/null <<EOF
+# INTERVAL=$interval (written by setup.sh, which reads it back when re-run)
 [Unit]
-Description=Change the Inky photo frame picture every $interval minutes
+Description=Change the Inky photo frame picture every $interval minutes, on the clock
 
 [Timer]
+OnCalendar=$calendar
 OnBootSec=30s
-OnUnitActiveSec=${interval}min
+AccuracySec=1s
 
 [Install]
 WantedBy=timers.target

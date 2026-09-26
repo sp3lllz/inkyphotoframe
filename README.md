@@ -1,6 +1,6 @@
 # inkyphotoframe
 
-A digital photo frame that's virtually indistinguishable from a real one. A Raspberry Pi shows your photos on a Pimoroni colour e-ink display and changes to a new random one every 30 minutes (or whatever interval you like). E-ink holds its picture with the power off, so it looks like a print, not a screen.
+A digital photo frame that's virtually indistinguishable from a real one. A Raspberry Pi shows your photos on a Pimoroni colour e-ink display and changes to a new random one on the hour and at half past (or whatever interval you like). E-ink holds its picture with the power off, so it looks like a print, not a screen.
 
 ![Inky Photo Frame welcome image](welcome.jpg)
 
@@ -58,6 +58,8 @@ To change **how often the photo changes**, run the install command again with `I
 curl -sSL https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/setup.sh | INTERVAL=60 bash
 ```
 
+Changes happen on the clock, so the interval has to fit evenly into an hour or a day: for example `15` (:00, :15, :30, :45), `30` (the default), `60` (on the hour), `120` (every other hour) or `1440` (midnight). A photo is also shown 30 seconds after the Pi starts.
+
 ## Handy commands
 
 | Command | What it does |
@@ -89,7 +91,7 @@ Your `photos` folder is left alone.
 
 ## How it works
 
-- `setup.sh` installs the Python libraries (prebuilt from apt where possible, so nothing is compiled on the Pi), turns on SPI and I2C, installs Pimoroni's [inky](https://github.com/pimoroni/inky) library into a virtual environment in `/opt/inkyframe`, and sets up a systemd timer that runs the frame 30 seconds after boot and then every `INTERVAL` minutes. It's safe to run as many times as you like.
+- `setup.sh` installs the Python libraries (prebuilt from apt where possible, so nothing is compiled on the Pi), turns on SPI and I2C, installs Pimoroni's [inky](https://github.com/pimoroni/inky) library into a virtual environment in `/opt/inkyframe`, and sets up a systemd timer that runs the frame 30 seconds after boot and then on the clock every `INTERVAL` minutes. It's safe to run as many times as you like.
 - `inkyframe.py` picks a photo, fits it to the display and shows it. It runs once each time the timer fires and then exits, so nothing sits in memory between changes.
 
 ## The frame
