@@ -6,6 +6,7 @@
 # Re-run it at any time to update; your photos and settings are kept.
 # Photos change on the clock, every 30 minutes by default. To change that: ... | INTERVAL=60 bash
 # Battery mode for a PiSugar (switches the Pi off between photos, every 6 hours by default): ... | BATTERY=yes bash
+# Photos from a Synology Photos album shared with the frame's own DSM account: ... | SYNOLOGY=yes bash
 set -euo pipefail
 
 REPO=https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main
@@ -41,6 +42,10 @@ main() {
     if [[ -f $UNIT_DIR/inkyframe-battery.service ]]; then was_battery=yes; fi
     battery=${BATTERY:-$was_battery}
     [[ $battery == yes || $battery == no ]] || die "BATTERY must be yes or no."
+    # Synology Photos: SYNOLOGY=yes or no, otherwise keep whatever was set up last time.
+    local synology_conf=$home/.config/inkyframe/synology.conf synology
+    synology=${SYNOLOGY:-$([[ -f $synology_conf ]] && echo yes || echo no)}
+    [[ $synology == yes || $synology == no ]] || die "SYNOLOGY must be yes or no."
     # Each mode has its own default interval. The last one used is kept, unless battery mode was just switched.
     if [[ $battery == yes ]]; then default_interval=360; fi
     if [[ $battery == "$was_battery" ]]; then
@@ -80,7 +85,7 @@ main() {
     else
         warn "raspi-config not found: make sure SPI and I2C are enabled."
     fi
-    # The Inky drives the SPI chip-select pin itself, so stop the kernel from claiming it.
+    # The Inky drives the SPI chip-select pin itself, so stop the kernel from claiming it (from Pimoroni's inky README).
     local boot_config=/boot/firmware/config.txt
     [[ -f $boot_config ]] || boot_config=/boot/config.txt
     if [[ -f $boot_config ]] && ! grep -q '^dtoverlay=spi0-0cs' "$boot_config"; then
@@ -97,14 +102,18 @@ main() {
     fetch inkyframe.py "$APP_DIR/inkyframe.py"
     fetch buttons.py "$APP_DIR/buttons.py"
     fetch battery.py "$APP_DIR/battery.py"
+    fetch synology.py "$APP_DIR/synology.py"
     fetch welcome.jpg "$APP_DIR/welcome.jpg"
     # --system-site-packages lets pip reuse the apt packages above; --clear rebuilds a venv broken by an OS upgrade.
     "$APP_DIR/venv/bin/python" -c '' 2>/dev/null || sudo python3 -m venv --clear --system-site-packages "$APP_DIR/venv"
     sudo "$APP_DIR/venv/bin/pip" install --quiet --upgrade --disable-pip-version-check \
         --extra-index-url https://www.piwheels.org/simple inky
     "$APP_DIR/venv/bin/python" -c 'import inky.auto, spidev, smbus2' || die "The Python libraries didn't install correctly (see above)."
-    printf '#!/bin/sh\nexec %s/venv/bin/python %s/inkyframe.py "$@"\n' "$APP_DIR" "$APP_DIR" |
-        sudo tee /usr/local/bin/inkyframe >/dev/null
+    sudo tee /usr/local/bin/inkyframe >/dev/null <<EOF
+#!/bin/sh
+[ "\$1" = sync ] && shift && exec $APP_DIR/venv/bin/python $APP_DIR/synology.py "\$@"
+exec $APP_DIR/venv/bin/python $APP_DIR/inkyframe.py "\$@"
+EOF
     sudo chmod 755 /usr/local/bin/inkyframe
     if [[ $battery == yes ]]; then install_pisugar; fi
 
@@ -191,10 +200,42 @@ EOF
         warn "Couldn't allow the buttons to shut the Pi down; everything else will still work."
     fi
 
+    if [[ $synology == yes ]]; then
+        setup_synology "$user" "$synology_conf"
+        sudo tee "$UNIT_DIR/inkyframe-sync.service" >/dev/null <<EOF
+[Unit]
+Description=Inky photo frame: fetch photos from Synology Photos
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=$user
+ExecStart=$APP_DIR/venv/bin/python $APP_DIR/synology.py
+Nice=10
+EOF
+        sudo tee "$UNIT_DIR/inkyframe-sync.timer" >/dev/null <<EOF
+[Unit]
+Description=Fetch photos for the Inky photo frame from Synology Photos every hour
+
+[Timer]
+OnCalendar=hourly
+$([[ $battery == yes ]] && echo "# (battery.py syncs at boot)" || echo "OnBootSec=1min")
+
+[Install]
+WantedBy=timers.target
+EOF
+    elif [[ -f $UNIT_DIR/inkyframe-sync.timer ]]; then
+        say "Turning Synology Photos off"
+        sudo systemctl disable --quiet --now inkyframe-sync.timer
+        sudo rm -f "$UNIT_DIR/inkyframe-sync.service" "$UNIT_DIR/inkyframe-sync.timer"
+        sudo rm -rf "$synology_conf" "$home/.cache/inkyframe/synology" # the stored password, and the cached photos
+    fi
 
     # These timers catch up on every boot after the Pi has been off, which would eat into battery mode's short wake-ups.
     local catch_up_timers=(apt-daily.timer apt-daily-upgrade.timer man-db.timer)
     local services=(inkyframe.timer inkyframe-buttons.service)
+    if [[ $synology == yes ]]; then services+=(inkyframe-sync.timer); fi
     if [[ $battery == yes ]]; then
         say "Setting up battery mode"
         sudo tee "$UNIT_DIR/inkyframe-battery.service" >/dev/null <<EOF
@@ -246,6 +287,12 @@ EOF
   Show the next photo:  inkyframe   (or: inkyframe previous / pause / info)
   See the log:          journalctl -u 'inkyframe*'
 EOF
+    if [[ $synology == yes ]]; then
+        cat <<EOF
+  Synology Photos:      shows the shared album while the NAS can be reached, local photos
+                        otherwise. Syncs every hour; to sync now: inkyframe sync
+EOF
+    fi
     if [[ $battery == yes ]]; then
         cat <<EOF
   Battery mode:         on battery, the Pi switches off between photos (never while you're
@@ -290,7 +337,8 @@ install_pisugar() {
             curl -fsSL -o "$tmp/$pkg.deb" \
                 "https://github.com/PiSugar/pisugar-power-manager-rs/releases/download/v$version/${pkg}_$version-1_$arch.deb"
         done
-        # Answer the packages' questions up front: the model, and keep the server private to this Pi (no web page).
+        # Answer the packages' questions up front (the question names are from each package's debian/templates in
+        # pisugar-power-manager-rs): the model, and keep the server private to this Pi, with no web page.
         sudo debconf-set-selections <<EOF
 pisugar-server pisugar-server/model select $model
 pisugar-server pisugar-server/address select 127.0.0.1
@@ -303,6 +351,64 @@ EOF
     # pisugar-poweroff cuts the battery output once the Pi has shut down. Only enable it: starting it shuts the Pi down!
     sudo systemctl enable --quiet pisugar-poweroff.service
     sudo systemctl enable --quiet --now pisugar-server.service
+}
+
+# Ask the user something on the terminal, even when the script itself is piped into bash.
+ask() {
+    local answer
+    if [[ ${2:-} == secret ]]; then
+        read -rsp "  $1: " answer </dev/tty
+        echo >&2
+    else
+        read -rp "  $1: " answer </dev/tty
+    fi
+    printf '%s' "$answer"
+}
+
+# Synology Photos: ask for the NAS and the frame's account the first time, then check that syncing works.
+setup_synology() {
+    local user=$1 conf=$2 url account password album code='' result answer
+    say "Setting up Synology Photos"
+    if [[ ! -f $conf ]]; then
+        url=${SYNOLOGY_URL:-} account=${SYNOLOGY_USER:-} password=${SYNOLOGY_PASSWORD:-} album=${SYNOLOGY_ALBUM:-}
+        if [[ -z $url || -z $account || -z $password || -z $album ]]; then
+            (: </dev/tty) 2>/dev/null || die "Synology setup asks some questions, so run the installer in a terminal."
+            cat <<'EOF'
+  The frame logs in with its own DSM account, and shows an album you've shared with that account.
+  See "Synology Photos" in the README for setting those up.
+EOF
+        fi
+        [[ -n $url ]] || url=$(ask "NAS address, e.g. 192.168.1.20")
+        if [[ $url != http* ]]; then # a bare address: use DSM's HTTPS port unless one is given
+            if [[ $url == *:* ]]; then url=https://$url; else url=https://$url:5001; fi
+        fi
+        [[ -n $account ]] || account=$(ask "The frame's DSM account name")
+        [[ -n $password ]] || password=$(ask "Its password" secret)
+        [[ -n $album ]] || album=$(ask "Name of the album shared with it")
+        sudo -u "$user" mkdir -p "$(dirname "$conf")"
+        printf 'URL=%s\nUSER=%s\nPASSWORD=%s\nALBUM=%s\n' "$url" "$account" "$password" "$album" |
+            sudo -u "$user" sh -c "umask 077 && cat >'$conf'" # readable only by the frame's user
+    fi
+    # The first sync, answering the two things it can ask about: a 2-factor code, and the NAS's own certificate.
+    while true; do
+        result=0
+        sudo -u "$user" "$APP_DIR/venv/bin/python" "$APP_DIR/synology.py" ${code:+"$code"} || result=$?
+        case $result in
+        0) return ;;
+        2)
+            (: </dev/tty) 2>/dev/null || break
+            code=$(ask "2-factor code for the frame's account")
+            ;;
+        3)
+            (: </dev/tty) 2>/dev/null || break
+            read -rp "  The NAS uses its own certificate, which is normal for a home NAS. Trust it? [Y/n] " answer </dev/tty
+            [[ ! $answer =~ ^[Nn] ]] || break
+            echo "VERIFY_CERT=no" | sudo -u "$user" tee -a "$conf" >/dev/null
+            ;;
+        *) break ;;
+        esac
+    done
+    warn "Can't sync from Synology yet, so the frame will show local photos. Check $conf, then run: inkyframe sync"
 }
 
 # Button settings for the config file; also appended to configs from before the buttons existed.

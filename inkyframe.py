@@ -8,6 +8,7 @@ Usage: inkyframe [COMMAND | PHOTO]
     pause       pause or resume the automatic photo changes
     info        show how to add photos, and what the buttons do
     shutdown    show a switched-off screen and shut the Pi down
+    sync [CODE] fetch photos from Synology Photos now (see synology.py)
     PHOTO       show a specific image file
 
 Photos are picked at random, and every photo is shown once before any repeat.
@@ -56,6 +57,7 @@ IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"
 WELCOME = Path(__file__).with_name("welcome.jpg")
 STATE_DIR = Path.home() / ".local/state/inkyframe"
 STATE_FILE = STATE_DIR / "state.json"
+SYNOLOGY_CACHE = Path.home() / ".cache/inkyframe/synology"  # filled by synology.py
 
 
 def load_config():
@@ -196,10 +198,31 @@ def local_ip():
         return "not connected"
 
 
+def synology_status():
+    """What the last Synology sync found, or None if Synology isn't set up."""
+    with contextlib.suppress(OSError, ValueError):
+        return json.loads((SYNOLOGY_CACHE / ".status.json").read_text())
+    return None
+
+
+def photo_source(config):
+    """(folder, photos): the Synology album while the last sync reached the NAS, otherwise the local folder."""
+    status = synology_status()
+    if status and status["ok"] and (photos := find_photos(SYNOLOGY_CACHE)):
+        return SYNOLOGY_CACHE, photos
+    folder = Path(config["PHOTO_DIR"]).expanduser()
+    return folder, find_photos(folder)
+
+
 def info_lines(config, state, folder, count):
+    local = Path(config["PHOTO_DIR"]).expanduser()
     with contextlib.suppress(ValueError):
-        folder = folder.relative_to(Path.home())
+        local = local.relative_to(Path.home())
     status = [f"{count} photo{'' if count == 1 else 's'}"]
+    if folder == SYNOLOGY_CACHE:
+        status[0] += f" from Synology album {synology_status()['album']}"
+    elif synology := synology_status():
+        status.append("Synology unreachable" if not synology["ok"] else f"Synology album {synology['album']} is empty")
     if power := battery():
         status.append(f"battery {power[0]:.0f}%" + (" (charging)" if power[1] else ""))
     if state["paused"]:
@@ -209,7 +232,7 @@ def info_lines(config, state, folder, count):
     return [
         "Add photos with an SFTP app:",
         f"server {socket.gethostname()}.local or {local_ip()}",
-        f"user {getpass.getuser()}, folder {folder}",
+        f"user {getpass.getuser()}, folder {local}",
         ", ".join(status),
         "",
         *buttons,
@@ -242,10 +265,10 @@ def update(command, photo, config, state, rotate):
     except RuntimeError as error:
         sys.exit(f"{error}\nIs the display attached, and has the Pi been rebooted since installing?")
     size = (display.height, display.width) if rotate in (90, 270) else (display.width, display.height)
-    folder = Path(config["PHOTO_DIR"]).expanduser()
+    folder, photos = photo_source(config)
 
     if command == "info":
-        image = text_screen(size, "Inky Photo Frame", info_lines(config, state, folder, len(find_photos(folder))))
+        image = text_screen(size, "Inky Photo Frame", info_lines(config, state, folder, len(photos)))
         state["showing"] = None
     elif command == "shutdown":
         lines = ["Wait 30 seconds, then it's safe to unplug.", "To start it again, unplug it and plug it back in."]
@@ -262,7 +285,7 @@ def update(command, photo, config, state, rotate):
         if photo:
             path, state["showing"] = photo, None
         else:
-            path = choose_photo(command, folder, find_photos(folder), state)
+            path = choose_photo(command, folder, photos, state)
             if path is None:
                 return
         print(f"Showing {path}")
@@ -275,7 +298,7 @@ def update(command, photo, config, state, rotate):
     image = image.rotate(-rotate, expand=True)
     try:
         display.set_image(image, saturation=float(config["SATURATION"]))
-    except TypeError:  # black/white/red displays have no saturation setting
+    except TypeError:  # black/white/red displays have no saturation setting (as in Pimoroni's image.py example)
         display.set_image(image)
     display.show()
     save_state(state)

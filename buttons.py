@@ -23,7 +23,11 @@ HOLD_SECONDS = 3
 
 
 def display_width():
-    """The display's width in pixels, read from its EEPROM (0 if it can't be read)."""
+    """The display's width in pixels, read from its EEPROM (0 if it can't be read).
+
+    This is the same read as read_eeprom() in Pimoroni's inky library (inky/eeprom.py, MIT licence), without
+    importing the whole library into this always-running service.
+    """
     try:
         with SMBus(1) as bus:
             bus.write_i2c_block_data(0x50, 0x00, [0x00])
@@ -33,7 +37,8 @@ def display_width():
 
 
 def main():
-    # BCM pin numbers for buttons A to D. The 13.3" display uses GPIO16 itself, so its C button is on GPIO25.
+    # BCM pin numbers for buttons A to D, from Pimoroni's inky examples (examples/7color/buttons.py and
+    # examples/spectra6/buttons.py). The 13.3" display uses GPIO16 itself, so its C button is on GPIO25.
     pins = {"A": 5, "B": 6, "C": 25 if display_width() >= 1600 else 16, "D": 24}
     chip = gpiodevice.find_chip_by_platform()
     buttons = {chip.line_offset_from_id(pin): label for label, pin in pins.items()}

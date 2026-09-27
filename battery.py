@@ -8,6 +8,9 @@ press of the frame's buttons, so you can use them or add photos. It never switch
 while charging, while the screen is updating, or while someone is logged in.
 
 inkyframe.py imports this for the battery level, so it only uses the standard library.
+
+The pisugar-server commands used here are documented in PiSugar's pisugar-power-manager-rs
+(https://github.com/PiSugar/pisugar-power-manager-rs), which setup.sh installs.
 """
 
 import fcntl
@@ -27,6 +30,8 @@ STATE_DIR = Path.home() / ".local/state/inkyframe"
 WAKE_FILE = STATE_DIR / "wake-at"  # when we last asked the PiSugar to wake us
 PRESSED = STATE_DIR / "pressed"  # touched by buttons.py on every press
 INKYFRAME = [sys.executable, str(Path(__file__).with_name("inkyframe.py"))]
+SYNOLOGY = [sys.executable, str(Path(__file__).with_name("synology.py"))]
+SYNOLOGY_SETTINGS = Path.home() / ".config/inkyframe/synology.conf"
 
 
 def pisugar(command):
@@ -117,13 +122,16 @@ def main():
     alarm = float(WAKE_FILE.read_text()) if WAKE_FILE.exists() else 0
     woken_by_alarm = abs(now - alarm) < 5 * 60
     stay_on_until = now if woken_by_alarm else now + AWAKE_SECONDS
+    sync = None
     if uptime() < 5 * 60:  # just booted
+        if SYNOLOGY_SETTINGS.exists():  # fetch any new Synology photos while this one is drawn, ready for next time
+            sync = subprocess.Popen(SYNOLOGY)
         subprocess.run([*INKYFRAME, "auto"], check=False)  # the timer only covers the times the Pi is on
 
     while True:
         time.sleep(10)
         try:
-            if not idle(stay_on_until):
+            if (sync and sync.poll() is None) or not idle(stay_on_until):
                 continue
             if float(pisugar("get battery")) < EMPTY:
                 subprocess.run([*INKYFRAME, "lowbattery"], check=False)

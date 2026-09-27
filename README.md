@@ -84,6 +84,33 @@ In battery mode the photo changes every 6 hours (at midnight, 6am, noon and 6pm)
 
 The installer finds a PiSugar 3 automatically. For a PiSugar 2, name the model: `PISUGAR_MODEL="PiSugar 2 (4-LEDs)"`, `"PiSugar 2 (2-LEDs)"` or `"PiSugar 2 Pro"`. The PiSugar S has no clock, so it can't wake the Pi and won't work with battery mode.
 
+## Synology Photos (optional)
+
+The frame can show an album from your Synology Photos library, and fall back to the photos on the Pi when the NAS can't be reached. It logs in with its own DSM account, which can only see the album you share with it.
+
+Favourites in Synology Photos belong to your own account, so another account can't see them directly. Sharing an album with the frame's account is how they get to the frame.
+
+**One-time setup on the NAS:**
+
+1. In DSM, go to **Control Panel → User & Group → Create** and add a user for the frame, e.g. `photoframe`. It needs no admin rights and no shared-folder access. On the applications page, allow **Synology Photos** only.
+2. If DSM makes every user use 2-factor login, either limit that to administrators (**Control Panel → Security → Account**) or have a code ready: the installer asks for one once.
+3. In Synology Photos, signed in as yourself, make the album for the frame. A conditional album fills itself: **Albums → Create album → Set conditions**, e.g. a 5-star rating (or Favourites, if your version offers it as a condition). Then share it: open the album, click **Share**, set **Privacy** to **Private**, and add the frame's user as a **Viewer**.
+
+**Turn it on** by running the install command with `SYNOLOGY=yes`:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sp3lllz/inkyphotoframe/main/setup.sh | SYNOLOGY=yes bash
+```
+
+It asks for the NAS's address, the frame's account, its password (not shown as you type) and the album's name. The answers are saved in `~/.config/inkyframe/synology.conf`, which only the frame's user can read.
+
+**How it behaves:**
+
+- **Syncing:** it syncs every hour, or at each wake-up in battery mode. It downloads the 1280-pixel previews Synology Photos makes, not the originals, which is plenty for the screen and much quicker; iPhone HEIC photos should work too. Photos you take out of the album disappear from the frame.
+- **Which photos it shows:** after a sync that reached the NAS, it shows only the album's photos. If the last sync couldn't reach it, it shows the photos in `~/photos` until the NAS is back. The info screen (button D) says which.
+- **Commands:** `inkyframe sync` syncs straight away (add the code, e.g. `inkyframe sync 123456`, if it asks for a 2-factor code). `journalctl -u inkyframe-sync` shows what each sync did.
+- **Turning it off:** use `SYNOLOGY=no`. That deletes the saved password and the downloaded photos.
+
 ## Settings
 
 Edit the settings with `sudo nano /etc/inkyframe.conf`. Changes apply from the next photo change, or straight away if you run `inkyframe`.
@@ -111,6 +138,7 @@ Changes happen on the clock, so the interval has to fit evenly into an hour or a
 | --- | --- |
 | `inkyframe` | Show the next photo now |
 | `inkyframe previous` / `pause` / `info` / `shutdown` | The same as the buttons |
+| `inkyframe sync` | Fetch new photos from Synology Photos now |
 | `inkyframe path/to/photo.jpg` | Show a specific photo |
 | `journalctl -u 'inkyframe*'` | See which photos were shown, button presses, when it switched off on battery, and any errors |
 | `systemctl list-timers inkyframe.timer` | See when the next change is due |
@@ -123,15 +151,17 @@ Run the install command again. Your photos and settings are kept.
 
 - **`No EEPROM detected`**: check the display is pushed firmly onto the GPIO header, and that you've rebooted since installing.
 - **`Woah there, some pins we need are in use!`**: reboot. The installer changes a boot setting (`dtoverlay=spi0-0cs`) that only takes effect after a restart.
+- **Info screen says "Synology unreachable"**: run `journalctl -u inkyframe-sync -n 20` to see why the last sync failed.
 - **Buttons do nothing**: run `journalctl -u inkyframe-buttons -n 20` to see whether presses are being picked up.
 - **Anything else**: run `journalctl -u 'inkyframe*' -n 50` and look at the last few lines.
 
 ## Uninstalling
 
 ```bash
-sudo systemctl disable --now inkyframe.timer inkyframe-buttons.service inkyframe-battery.service
+sudo systemctl disable --now inkyframe.timer inkyframe-buttons.service inkyframe-battery.service inkyframe-sync.timer
 sudo rm -rf /opt/inkyframe /etc/inkyframe.conf /etc/systemd/system/inkyframe* /usr/local/bin/inkyframe /etc/sudoers.d/inkyframe
 sudo systemctl daemon-reload
+rm -rf ~/.config/inkyframe ~/.cache/inkyframe ~/.local/state/inkyframe
 ```
 
 Your `photos` folder is left alone. If you used battery mode, also run `sudo apt purge pisugar-server pisugar-poweroff` and `sudo systemctl enable --now apt-daily.timer apt-daily-upgrade.timer man-db.timer`.
@@ -140,9 +170,25 @@ Your `photos` folder is left alone. If you used battery mode, also run `sudo apt
 
 - `setup.sh` installs the Python libraries (prebuilt from apt where possible, so nothing is compiled on the Pi), turns on SPI and I2C, installs Pimoroni's [inky](https://github.com/pimoroni/inky) library into a virtual environment in `/opt/inkyframe`, and sets up a systemd timer that runs the frame 30 seconds after boot and then on the clock every `INTERVAL` minutes. It's safe to run as many times as you like.
 - `inkyframe.py` picks a photo, fits it to the display and shows it. It runs once each time the timer fires or a button is pressed, then exits.
+- `synology.py` runs only with Synology Photos turned on. It logs in as the frame's account, finds the shared album, downloads any new previews into `~/.cache/inkyframe/synology`, deletes ones no longer in the album, and records whether it reached the NAS. It uses only Python's standard library.
 - `buttons.py` is a small service that keeps running while the Pi is on. It sleeps until a button is pressed and then runs `inkyframe.py`. It also lets the buttons shut the Pi down, via a sudoers rule that allows only `systemctl poweroff`.
 - `battery.py` runs only in battery mode. It talks to PiSugar's `pisugar-server` (installed from PiSugar's GitHub releases, and only reachable from the Pi itself) to read the battery, sync the clock and set the wake-up alarm, then powers off. `pisugar-poweroff` then cuts the battery output, so the switched-off Pi draws almost nothing. Battery mode also turns off the `apt-daily` and `man-db` timers, which would otherwise run on every wake-up.
 
 ## The frame
 
 There are a few options for the frame. You can make something from scratch, or use something like [this mount](https://makerworld.com/en/models/1221196-ikea-rodlam-inky-impression-7-mount#profileId-1238116) to fit it in an off-the-shelf IKEA frame and make it even more inconspicuous!
+
+## Credits
+
+This project builds on other people's work:
+
+- **[Pimoroni's inky library](https://github.com/pimoroni/inky)** (MIT licence, © Pimoroni Ltd) drives the display. From the same project:
+  - **Buttons:** the button pins in `buttons.py` come from its examples (`examples/7color/buttons.py` and `examples/spectra6/buttons.py`).
+  - **Display detection:** the EEPROM read in `buttons.py` works the same way as its `inky/eeprom.py`.
+  - **Colour fallback:** the fallback for displays without colour saturation in `inkyframe.py` follows its `image.py` example.
+  - **Pin setting:** the `spi0-0cs` setting comes from its README.
+- **[esp32-photoframe-server](https://github.com/aitjcize/esp32-photoframe-server)** by aitjcize (MIT licence) showed how to talk to Synology Photos. `synology.py` follows its `backend/pkg/synology/client.go` for four things: logging in as a trusted device, listing albums shared with an account, reading them by their share passphrase, and requesting previews. That includes aashishvanand's fixes in [pull request #63](https://github.com/aitjcize/esp32-photoframe-server/pull/63).
+- **[N4S4's unofficial Synology Photos API notes](https://github.com/N4S4/synology-photos-api)** document the album-listing parameters.
+- **[PiSugar's power manager](https://github.com/PiSugar/pisugar-power-manager-rs)** (GPL-3.0) is installed for battery mode. `battery.py` uses its documented commands, and the installer answers its packages' setup questions.
+
+No code was copied verbatim: the Python here was written for this project, based on what these projects showed.
