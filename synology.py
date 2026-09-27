@@ -18,7 +18,7 @@ Usage: synology.py [CODE]    CODE is a 2-factor code, only needed the first time
 Synology Photos' API isn't officially documented. The calls here follow aitjcize's
 esp32-photoframe-server (https://github.com/aitjcize/esp32-photoframe-server, MIT licence;
 backend/pkg/synology/client.go), including aashishvanand's fix in its pull request #63, and
-N4S4's unofficial API notes (https://github.com/N4S4/synology-photos-api).
+N4S4's unofficial API notes (https://github.com/N4S4/synology-photos-api) and synology-api library.
 """
 
 import contextlib
@@ -96,7 +96,9 @@ def save_setting(key, value):
 
 
 def log_in(dsm, settings, code):
-    form = {"account": settings["USER"], "passwd": settings["PASSWORD"], "session": "InkyFrame", "format": "sid"}
+    # DSM refuses accounts without admin rights (error 402) unless the session is "webui", as N4S4's
+    # synology-api found (https://github.com/N4S4/synology-api, commit 2f85cf9).
+    form = {"account": settings["USER"], "passwd": settings["PASSWORD"], "session": "webui", "format": "sid"}
     if settings.get("DEVICE_ID"):
         form["device_id"] = settings["DEVICE_ID"]
     if code:  # log in with the code and ask to become a trusted device, as esp32-photoframe-server does
@@ -172,7 +174,7 @@ def sync(settings, code):
         return album["name"], sum((CACHE / name).exists() for name in wanted)
     finally:
         with contextlib.suppress(OSError, SyncError):
-            dsm.call("SYNO.API.Auth", "logout", 6, session="InkyFrame")
+            dsm.call("SYNO.API.Auth", "logout", 6, session="webui")
 
 
 def sync_when_reachable(settings, code):
